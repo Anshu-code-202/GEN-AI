@@ -1,1 +1,4 @@
 .venv
+.env
+apikeys.docx
+tempCodeRunnerFile.py

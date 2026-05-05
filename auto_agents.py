@@ -18,7 +18,8 @@ from langchain_core.messages import HumanMessage, ToolMessage
 
 # Tavily for real-time news search
 from tavily import TavilyClient
-
+from langchain.agents import create_agent
+# from langchain.agents import initialize_agent, AgentType
 
 # =========================
 # TOOL 1: WEATHER TOOL
@@ -40,7 +41,7 @@ def get_weather(city: str) -> str:
     data = response.json()
 
     # Debugging: print full API response
-    print("DEBUG:", data)
+    # print("DEBUG:", data)
 
     # Error handling
     if data.get("cod") != 200:
@@ -106,77 +107,22 @@ llm = ChatMistralAI(
     api_key=os.getenv("MISTRAL_API_KEY")
 )
 
-# =========================
-# STEP 3: Register Tools
-# =========================
-# Dictionary mapping tool names to functions (used during execution)
-tools = {
-    "get_weather": get_weather,
-    "get_news": get_news
-}
+agent = create_agent(
+    llm,
+    tools=[get_weather,get_news],
+    system_prompt="You are helpful city assistant"
 
-# Bind tools to LLM → enables tool-calling capability
-llm_with_tool = llm.bind_tools([get_weather, get_news])
-
-
-# =========================
-# STEP 4: AGENT LOOP (CORE LOGIC)
-# =========================
-messages = []  # Stores full conversation history
-
-print("City Intelligence system")
-print("Type exit to quit")
+)
+print("City Agent : type exit to quit")
 
 while True:
-    user_input = input("you: ")
-
-    # Exit condition
+    user_input=input("you: ")
     if user_input.lower() == "exit":
         break
 
-    # Add user message to conversation
-    messages.append(HumanMessage(content=user_input))
-
-    # Inner loop → keeps running until final answer is produced
-    while True:
-        # Call LLM with current conversation
-        result = llm_with_tool.invoke(messages)
-
-        # Store LLM response
-        messages.append(result)
-
-        # =========================
-        # TOOL CALL HANDLING
-        # =========================
-        if result.tool_calls:
-            for tool_call in result.tool_calls:
-                tool_name = tool_call['name']
-
-                # Human-in-the-loop confirmation (important safety feature)
-                confirm = input(f"Agent wants to call {tool_name}. Do you agree (yes/no)? ")
-
-                if confirm.lower() == "no":
-                    print("Tool access denied. Cannot fetch external data.")
-                    break
-
-                # Execute tool
-                tool_result = tools[tool_name].invoke(tool_call["args"])
-
-                # Send tool result back to LLM
-                messages.append(
-                    ToolMessage(
-                        content=tool_result,
-                        tool_call_id=tool_call['id']
-                    )
-                )
-            continue  # Continue loop so LLM can process tool output
-
-        # =========================
-        # FINAL RESPONSE (NO TOOL NEEDED)
-        # =========================
-        else:
-            print(result.content)
-            break
-
-
-        # user input -> llm(decide tool) -> tool executees -> tool messzge added -> loop again -> llm (final ans)
+    result=agent.invoke(
+        {
+            "messages":[{"role":"user","content":user_input}]
+        }
+    )
+    print("bot:" ,result['messages'][-1].content)
